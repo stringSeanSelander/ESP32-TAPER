@@ -1,0 +1,1014 @@
+//STEPS FOR COMPLETION
+//**************************************************************
+//Create factory message
+//Switch for on and off
+//Button for puffing
+//Buttons for features
+//Set timer function
+//Set taper function with options
+  //Show warning message of interval extension
+  //Reset function within taper (Only resetting or extending interval)
+
+int puffCycle, puffStage;
+//ESP32 IS NOT AVR BOARD SO CLKPR WILL NOT WORK
+  //Use setCpuFrequencyMhz(); to slow down frequency for power saving
+
+#include <LiquidCrystal.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+
+int switchPin = 15;
+int redLEDPin = 2;
+int greenLEDPin = 0; 
+int blueLEDPin = 4;
+int atomizerButtonPin = 16; 
+int upButtonPin = 17;
+int downButtonPin = 5;
+int OLEDPin = 18; 
+int atomizerPin = 19;
+//int atomizerMic = 23;
+
+int functionSelect = 0;
+int puffCycle1 = 5, puffCycle2 = 3, puffCycle3 = 2;
+int puffCycle1Stage1 = 12, puffCycle1Stage2 = 8, puffCycle1Stage3 = 4, puffCycle1Stage4 = 2, puffCycle1Stage5 = 1;
+int puffCycle2Stage1 = 8, puffCycle2Stage2 = 4, puffCycle2Stage3 = 2;
+int puffCycle3Stage1 = 6, puffCycle3Stage2 = 3;
+
+int puffCount = 0, maxPuffs = 999999;
+int puffCaptured, puffCapture;
+int buttonCount;
+
+int hourTens, hourOnes, minuteTens, minuteOnes, selector, offCaptureTime;
+int timerPlaceholders[4] = {hourTens, hourOnes, minuteTens, minuteOnes};
+
+int buttonVal, clicked = 0, taperClicked = 0;
+
+const int x = 128;
+const int y = 64;
+const int reset = -1;
+Adafruit_SSD1306 display (x, y, &Wire, reset);
+
+String taperOptions[3] = {"1-3-5-8-12", "3-6-12", "6-12"};
+
+void setup() {
+  // put your setup code here, to run once:
+
+  pinMode(atomizerButtonPin,INPUT_PULLUP);
+  pinMode(switchPin, INPUT_PULLUP);
+  pinMode(upButtonPin, INPUT_PULLUP);
+  pinMode(downButtonPin, INPUT_PULLUP);
+  pinMode(redLEDPin,OUTPUT);
+  pinMode(greenLEDPin,OUTPUT);
+  pinMode(blueLEDPin, OUTPUT);
+  pinMode(OLEDPin, OUTPUT);
+  pinMode(atomizerPin, OUTPUT);
+
+  Serial.begin(9600);
+  digitalWrite(OLEDPin, HIGH);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+  displayFactoryMessage();
+}
+
+void clearDisplay(){//Clears display
+  display.display();
+  display.clearDisplay();
+  display.display();
+}
+
+void displayFactoryMessage(){//Factory message
+  display.display();
+  delay(1);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.println(F("Factory Test"));
+  display.display();
+  delay(500);
+  display.display();
+  display.clearDisplay();
+  display.display();
+}
+
+//If up or down button pressed, add selection for taperOff or timerStart
+  //If taper, ask for confirmation and warn about not being able to stop it
+    //Assess options for tapering time and use middle button to flip through and confirm with upButton
+  //If timer, ask for confirmation of the set time
+
+int selectFunction(){//Select taper or timer function and won't execute if button is held
+  while (true){
+    int vapePower = digitalRead(switchPin);
+    int atomizerButtonVal = digitalRead(atomizerButtonPin);
+    int upButtonVal = digitalRead(upButtonPin);
+    int downButtonVal = digitalRead(downButtonPin);
+    display.display();
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print(F("Press [-] for Taper function, press [+] for timer function."));
+    display.setCursor(27, 55);
+    display.print(F("[-]"));
+    display.setCursor(85, 55);
+    display.print(F("[+]"));
+    display.display();
+    while (upButtonVal == 1 && downButtonVal == 1){
+      while (true){
+        int vapePower = digitalRead(switchPin);
+        int atomizerButtonVal = digitalRead(atomizerButtonPin);
+        int upButtonVal = digitalRead(upButtonPin);
+        int downButtonVal = digitalRead(downButtonPin);
+        if (downButtonVal == 0){
+          return 1;
+        }
+        if (upButtonVal == 0){
+          return 2;
+        }
+        if (atomizerButtonVal == 0){
+          return -1;
+        }
+      }
+    }
+  }
+}
+
+int selectTaper(){ //Select the different taper options
+  display.display();
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.print(F("Press the 'fire' button to cycle through taper options. Use the - to escape and the + to confirm."));
+  display.setCursor(30, 45);
+  display.print(taperOptions[buttonCount]);
+  display.setCursor(27, 55);
+  display.print(F("[-]"));
+  display.setCursor(85, 55);
+  display.print(F("[+]"));
+  display.display();
+  
+  while (true){
+    Serial.println("looping");
+    int downButtonVal = digitalRead(downButtonPin);
+    while (downButtonVal == 0){
+      while (true){
+        Serial.println("Pressed");
+        downButtonVal = digitalRead(downButtonPin);
+        if (downButtonVal == 1){
+          break;
+        }
+      }
+      break;
+    }
+    break;
+  }
+  while (true){
+    if (taperClicked == 1){
+      delay(10);
+      taperClicked = 0;
+    }
+    int downButtonVal = digitalRead(downButtonPin);
+    int upButtonVal = digitalRead(upButtonPin);
+    buttonVal = digitalRead(atomizerButtonPin);
+    if (downButtonVal == 0){
+      return -1;
+    }
+    if (upButtonVal == 0){
+      return buttonCount;
+    }
+    Serial.print("Outside bc = ");
+    Serial.println(buttonCount);
+    while (buttonVal == 0 && taperClicked == 0){
+      Serial.println("Hello");
+      while (true){
+        Serial.print("buttonVal = ");
+        Serial.println(buttonVal);
+        buttonVal = digitalRead(atomizerButtonPin);
+        while (buttonVal == 1){
+          buttonCount++;
+          if (buttonCount > 2){
+            buttonCount = 0;
+          }
+          display.display();
+          display.clearDisplay();
+          display.setCursor(0, 0);
+          display.print(F("Press the 'fire' button to cycle through taper options. Use the - to escape and the + to confirm."));
+          display.setCursor(30, 45);
+          display.print(taperOptions[buttonCount]);
+          display.setCursor(27, 55);
+          display.print(F("[-]"));
+          display.setCursor(85, 55);
+          display.print(F("[+]"));
+          display.display();
+          taperClicked = 1;
+          break;
+        }
+        break;
+      }
+      
+    }
+    if (upButtonVal == 0){
+          Serial.println("Works");
+          return buttonCount;
+    }
+  }
+}
+//Display screen asking how long the timer should be.
+  //Use 'fire' button to select to different digit
+  //Use up and down buttons to change value
+  //Flashing the number being edited
+  //At the end, ask for a confirmation of the time
+
+void timerDisplayFlash(){//Flashes timer according to the current selector placeholder
+  while (selector == 0){
+    display.display();
+    display.fillRect(35, 15, 5, 10, BLACK);
+    display.display();
+    return;
+  }
+  while (selector == 1){
+    display.display();
+    display.fillRect(48, 15, 5, 10, BLACK);
+    display.display();
+    return;
+  }
+  while (selector == 2){
+    display.display();
+    display.fillRect(61, 15, 5, 10, BLACK);
+    display.display();
+    return;
+  }
+  while (selector == 3){
+    display.display();
+    display.fillRect(74, 15, 5, 10, BLACK);
+    display.display();
+    return;
+  }
+}
+void displayTimer(){ //Displays timer
+  display.display();
+  display.clearDisplay();
+  display.setCursor(0, 27);
+  display.print(F("Use - and + to changeto desired number"));
+  display.setCursor(0, 45);
+  display.print(F("Press power to select"));
+  display.setCursor(27, 55);
+  display.print(F("[-]"));
+  display.setCursor(85, 55);
+  display.print(F("[+]"));
+  display.setCursor(35, 15);
+  display.print(timerPlaceholders[0]);
+  display.setCursor(48, 15);
+  display.print(timerPlaceholders[1]);
+  display.setCursor(55, 15);
+  display.print(F(":"));
+  display.setCursor(61, 15);
+  display.print(timerPlaceholders[2]);
+  display.setCursor(74, 15);
+  display.print(timerPlaceholders[3]);
+  display.display();
+  buttonVal = 1;
+  //buttonVal = 1; //Used as safety to ensure no double trigger of selector
+}
+
+void selectTimer(){ //Allows user to change the selector and values in each placeholder
+  display.display();
+  display.clearDisplay();
+  display.setCursor(0, 27);
+  display.print(F("Use - and + to changeto desired number"));
+  display.setCursor(0, 45);
+  display.print(F("Press power to select"));
+  display.setCursor(27, 55);
+  display.print(F("[-]"));
+  display.setCursor(85, 55);
+  display.print(F("[+]"));
+  display.setCursor(35, 15);
+  display.print(timerPlaceholders[0]);
+  display.setCursor(48, 15);
+  display.print(timerPlaceholders[1]);
+  display.setCursor(55, 15);
+  display.print(F(":"));
+  display.setCursor(61, 15);
+  display.print(timerPlaceholders[2]);
+  display.setCursor(74, 15);
+  display.print(timerPlaceholders[3]);
+  display.display();
+  int captureTime = millis();
+  bool flashing = false;
+  while (true){
+    Serial.print("upButtonVal loop");
+    int upButtonVal = digitalRead(upButtonPin);
+    if (upButtonVal == 1){
+      break;
+    }
+  }
+  while (true){
+    if (clicked == 1){
+      delay(10);
+      clicked = 0;
+    }
+    Serial.println("Hello");
+    int downButtonVal = digitalRead(downButtonPin);
+    int upButtonVal = digitalRead(upButtonPin);
+    int buttonVal = digitalRead(atomizerButtonPin);
+    if ((millis() - captureTime) >= 750 && flashing == false){
+      timerDisplayFlash();
+      int offCaptureTime = millis();
+      flashing = true;
+    }
+    if ((millis() - offCaptureTime) >= 750 && flashing == true){
+      displayTimer();
+      captureTime = millis();
+      flashing = false;
+    }
+    while (buttonVal == 0 && clicked == 0){
+      selector++;
+      captureTime = millis();
+      Serial.println("Paused");
+      displayTimer();
+      while (true){
+        buttonVal = digitalRead(atomizerButtonPin);
+        if (buttonVal == 1){
+          clicked = 1;
+          Serial.print("Error:::::");
+          break;
+        }
+      }
+    }
+    while (upButtonVal == 0){
+      delay(50);
+      while(true){
+        upButtonVal = digitalRead(upButtonPin);
+        if (upButtonVal == 1){
+          captureTime = millis();
+          timerPlaceholders[selector]++;
+          if (timerPlaceholders[selector] > 9 && selector != 2){
+            timerPlaceholders[selector] = 0;
+          }
+          else if (timerPlaceholders[selector] > 5 && selector == 2){
+            timerPlaceholders[selector] = 0;
+          }
+          
+          displayTimer();
+          break;
+        }
+      }
+    }
+    while (downButtonVal == 0){
+      delay(50);
+      while(true){
+        downButtonVal = digitalRead(downButtonPin);
+        if (downButtonVal == 1){
+          captureTime = millis();
+          timerPlaceholders[selector]--;
+          if (selector == 0 || selector == 1 || selector == 3){
+            if (timerPlaceholders[selector] < 0){
+              timerPlaceholders[selector] = 9;
+            }
+          }
+          else if (selector == 2){
+            if (timerPlaceholders[selector] < 0){
+              timerPlaceholders[selector] = 5;
+            }
+          }
+          displayTimer();
+          break;
+        }
+      }
+    }
+    if (selector == 4){
+      selector = 0;
+      confirmTimer();
+      Serial.println("Hello there");
+      return;
+    }
+  }
+}
+void confirmTimer(){//Confirmation message to ensure correct time has been set
+  display.display();
+  clearDisplay();
+  display.setCursor(0, 0);
+  display.print(F("Is this the correct  time you would like  to wait?"));
+  display.setCursor(18, 45);
+  display.print(F("Cancel"));
+  display.setCursor(21, 55);
+  display.print(F("[-]"));
+  display.setCursor(70, 45);
+  display.print(F("Confirm"));
+  display.setCursor(85, 55);
+  display.print(F("[+]"));
+  display.setCursor(35, 35);
+  display.print(timerPlaceholders[0]);
+  display.setCursor(48, 35);
+  display.print(timerPlaceholders[1]);
+  display.setCursor(55, 35);
+  display.print(F(":"));
+  display.setCursor(61, 35);
+  display.print(timerPlaceholders[2]);
+  display.setCursor(74, 35);
+  display.print(timerPlaceholders[3]);
+  display.display();
+  
+  
+}
+void beginTimer(){//Timer execution
+  Serial.print("TIMER BEGIN ");
+  display.display();
+  display.clearDisplay();
+  display.setCursor(35, 35);
+  display.print(timerPlaceholders[0]);
+  display.setCursor(48, 35);
+  display.print(timerPlaceholders[1]);
+  display.setCursor(55, 35);
+  display.print(F(":"));
+  display.setCursor(61, 35);
+  display.print(timerPlaceholders[2]);
+  display.setCursor(74, 35);
+  display.print(timerPlaceholders[3]);
+  display.display();
+  digitalWrite(blueLEDPin, HIGH);
+  int timeCapture = millis();
+  int statusCaptureTime = millis();
+  bool switchTrig = false;
+  while (true){
+    int vapePower = digitalRead(switchPin);
+    int elapsedTime = millis() - timeCapture;
+    int statusElapsedTime = millis() - statusCaptureTime;
+    int downButtonVal = digitalRead(downButtonPin);
+    int upButtonVal = digitalRead(upButtonPin);
+    int buttonVal = digitalRead(atomizerButtonPin);
+    if (vapePower == 1){
+      setCpuFrequencyMhz(240);
+      if (statusElapsedTime > 2999){
+        display.display();
+        display.clearDisplay();
+        display.display();
+        digitalWrite(blueLEDPin, LOW);
+      }
+      if (buttonVal == 0 || upButtonVal == 0 || downButtonVal == 0 || switchTrig == true){
+          digitalWrite(blueLEDPin, HIGH);
+          statusCaptureTime = millis();
+          display.display();
+          display.clearDisplay();
+          display.setCursor(35, 35);
+          display.print(timerPlaceholders[0]);
+          display.setCursor(48, 35);
+          display.print(timerPlaceholders[1]);
+          display.setCursor(55, 35);
+          display.print(F(":"));
+          display.setCursor(61, 35);
+          display.print(timerPlaceholders[2]);
+          display.setCursor(74, 35);
+          display.print(timerPlaceholders[3]);
+          display.display();
+          switchTrig = false;
+      }
+      if (elapsedTime > 59999){
+        timerPlaceholders[3]--;
+        timeCapture = millis();
+        elapsedTime = millis() - timeCapture;
+        if (timerPlaceholders[3] < 0){
+          timerPlaceholders[3] = 9;
+          timerPlaceholders[2]--;
+          if (timerPlaceholders[2] < 0){
+            timerPlaceholders[3] = 9;
+            timerPlaceholders[2] = 5;
+            timerPlaceholders[1]--;
+            if (timerPlaceholders[1] < 0){
+              timerPlaceholders[3] = 9;
+              timerPlaceholders[2] = 5;
+              timerPlaceholders[1] = 9;
+              timerPlaceholders[0]--;
+              if (timerPlaceholders[0] < 0){
+                clearDisplay();
+                timerPlaceholders[0] = 0;
+                timerPlaceholders[1] = 0;
+                timerPlaceholders[2] = 0;
+                timerPlaceholders[3] = 0;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    else if (vapePower == 0){
+      switchTrig = true;
+      digitalWrite(blueLEDPin, LOW);
+      setCpuFrequencyMhz(80);
+      Serial.print(timerPlaceholders[0]);
+      Serial.print(timerPlaceholders[1]);
+      Serial.print(":");
+      Serial.print(timerPlaceholders[2]);
+      Serial.println(timerPlaceholders[3]);
+      
+      display.display();
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.print(F("OFF"));
+      display.display();
+      if (elapsedTime > 59999){
+        timerPlaceholders[3]--;
+        timeCapture = millis();
+        elapsedTime = millis() - timeCapture;
+        if (timerPlaceholders[3] < 0){
+          timerPlaceholders[3] = 9;
+          timerPlaceholders[2]--;
+          if (timerPlaceholders[2] < 0){
+            timerPlaceholders[3] = 9;
+            timerPlaceholders[2] = 5;
+            timerPlaceholders[1]--;
+            if (timerPlaceholders[1] < 0){
+              timerPlaceholders[3] = 9;
+              timerPlaceholders[2] = 5;
+              timerPlaceholders[1] = 9;
+              timerPlaceholders[0]--;
+              if (timerPlaceholders[0] < 0){
+                clearDisplay();
+                timerPlaceholders[0] = 0;
+                timerPlaceholders[1] = 0;
+                timerPlaceholders[2] = 0;
+                timerPlaceholders[3] = 0;
+                break;
+              }
+            }
+          }
+        }
+      }    
+    }
+  }
+}
+void taperDisplayTime(){
+  display.display();
+  display.clearDisplay();
+  display.setCursor(35, 35);
+  display.print(timerPlaceholders[0]);
+  display.setCursor(48, 35);
+  display.print(timerPlaceholders[1]);
+  display.setCursor(55, 35);
+  display.print(F(":"));
+  display.setCursor(61, 35);
+  display.print(timerPlaceholders[2]);
+  display.setCursor(74, 35);
+  display.print(timerPlaceholders[3]);
+  display.display();
+}
+void taperOff(){      
+  int puffCycle = 0;
+  int taper = selectTaper();
+  while (taper == 0){
+    Serial.println("0");
+    int puffs[puffCycle1] = {5, 5, 5, 5, 5};
+    int waitTimes[puffCycle1] = {1, 3, 5, 8, 12};
+    if (puffCycle == 0){
+      timerPlaceholders[0] = 0;
+      timerPlaceholders[1] = 1;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+      maxPuffs = 5;
+    }
+    else if (puffCycle == 1){
+      timerPlaceholders[0] = 0;
+      timerPlaceholders[1] = 3;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+      maxPuffs = 5;
+    }
+    else if (puffCycle == 2){
+      timerPlaceholders[0] = 0;
+      timerPlaceholders[1] = 5;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+      maxPuffs = 5;
+    }
+    else if (puffCycle == 3){
+      timerPlaceholders[0] = 0;
+      timerPlaceholders[1] = 8;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+      maxPuffs = 5;
+    }
+    else if (puffCycle == 4){
+      timerPlaceholders[0] = 1;
+      timerPlaceholders[1] = 2;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+      maxPuffs = 5;
+    }
+    while (true){
+      int buttonVal = digitalRead(atomizerButtonPin);
+      if (buttonVal == 0){
+        int puffCounted = taperTakePuff();
+        Serial.print("PUFFCOUNTED = ");
+        Serial.println(puffCounted);
+        if (puffCounted > maxPuffs){
+          break;
+        }
+      }
+    }
+    break;
+  }
+  while (taper == 1){
+    Serial.println("1");
+    int puffs[puffCycle2] = {5, 5, 5};
+    int waitTimes[puffCycle2] = {3, 6, 12};
+    if (puffCycle == 0){
+      timerPlaceholders[0] = 0;
+      timerPlaceholders[1] = 3;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+    }
+    else if (puffCycle == 1){
+      timerPlaceholders[0] = 0;
+      timerPlaceholders[1] = 6;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+    }
+    else if (puffCycle == 2){
+      timerPlaceholders[0] = 1;
+      timerPlaceholders[1] = 2;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+    }
+    break;
+  }
+  while (taper == 2){
+    Serial.println("2");
+    int puffs[puffCycle3] = {5, 5};
+    int waitTimes[puffCycle3] = {6, 12};
+    if (puffCycle == 0){
+      timerPlaceholders[0] = 0;
+      timerPlaceholders[1] = 6;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+    }
+    else if (puffCycle == 1){
+      timerPlaceholders[0] = 1;
+      timerPlaceholders[1] = 2;
+      timerPlaceholders[2] = 0;
+      timerPlaceholders[3] = 0;
+    }
+    break;
+  }
+  Serial.print("TIMER BEGIN ");
+  display.display();
+  display.clearDisplay();
+  display.setCursor(35, 35);
+  display.print(timerPlaceholders[0]);
+  display.setCursor(48, 35);
+  display.print(timerPlaceholders[1]);
+  display.setCursor(55, 35);
+  display.print(F(":"));
+  display.setCursor(61, 35);
+  display.print(timerPlaceholders[2]);
+  display.setCursor(74, 35);
+  display.print(timerPlaceholders[3]);
+  display.display();
+  digitalWrite(blueLEDPin, HIGH);
+  while (taper == -1){
+    Serial.println("-1");
+    display.display();
+    display.clearDisplay();
+    display.display();
+    break;
+  }
+  if (taper != -1){
+    int timeCapture = millis();
+    int statusCaptureTime = millis();
+    bool switchTrig = false;
+    while (true){
+      int vapePower = digitalRead(switchPin);
+      int elapsedTime = millis() - timeCapture;
+      int statusElapsedTime = millis() - statusCaptureTime;
+      int downButtonVal = digitalRead(downButtonPin);
+      int upButtonVal = digitalRead(upButtonPin);
+      int buttonVal = digitalRead(atomizerButtonPin);
+      Serial.println(elapsedTime);
+      if (vapePower == 1){
+        setCpuFrequencyMhz(240);
+        if (statusElapsedTime > 2999){
+          display.display();
+          display.clearDisplay();
+          display.display();
+          digitalWrite(blueLEDPin, LOW);
+        }
+        if (buttonVal == 0 || upButtonVal == 0 || downButtonVal == 0 || switchTrig == true){
+            digitalWrite(blueLEDPin, HIGH);
+            statusCaptureTime = millis();
+            display.display();
+            display.clearDisplay();
+            display.setCursor(35, 35);
+            display.print(timerPlaceholders[0]);
+            display.setCursor(48, 35);
+            display.print(timerPlaceholders[1]);
+            display.setCursor(55, 35);
+            display.print(F(":"));
+            display.setCursor(61, 35);
+            display.print(timerPlaceholders[2]);
+            display.setCursor(74, 35);
+            display.print(timerPlaceholders[3]);
+            display.display();
+            switchTrig = false;
+        }
+        if (elapsedTime > 499){
+          timerPlaceholders[3]--;
+          timeCapture = millis();
+          elapsedTime = millis() - timeCapture;
+          if (timerPlaceholders[3] < 0){
+            timerPlaceholders[3] = 9;
+            timerPlaceholders[2]--;
+            if (timerPlaceholders[2] < 0){
+              timerPlaceholders[3] = 9;
+              timerPlaceholders[2] = 5;
+              timerPlaceholders[1]--;
+              if (timerPlaceholders[1] < 0){
+                timerPlaceholders[3] = 9;
+                timerPlaceholders[2] = 5;
+                timerPlaceholders[1] = 9;
+                timerPlaceholders[0]--;
+                if (timerPlaceholders[0] < 0){
+                  clearDisplay();
+                  timerPlaceholders[0] = 0;
+                  timerPlaceholders[1] = 0;
+                  timerPlaceholders[2] = 0;
+                  timerPlaceholders[3] = 0;
+                  puffStage++;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      else if (vapePower == 0){
+        switchTrig = true;
+        digitalWrite(blueLEDPin, LOW);
+        setCpuFrequencyMhz(80);
+        Serial.print(timerPlaceholders[0]);
+        Serial.print(timerPlaceholders[1]);
+        Serial.print(":");
+        Serial.print(timerPlaceholders[2]);
+        Serial.println(timerPlaceholders[3]);
+        
+        display.display();
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.print(F("OFF"));
+        display.display();
+        if (elapsedTime > 59999){
+          timerPlaceholders[3]--;
+          timeCapture = millis();
+          elapsedTime = millis() - timeCapture;
+          if (timerPlaceholders[3] < 0){
+            timerPlaceholders[3] = 9;
+            timerPlaceholders[2]--;
+            if (timerPlaceholders[2] < 0){
+              timerPlaceholders[3] = 9;
+              timerPlaceholders[2] = 5;
+              timerPlaceholders[1]--;
+              if (timerPlaceholders[1] < 0){
+                timerPlaceholders[3] = 9;
+                timerPlaceholders[2] = 5;
+                timerPlaceholders[1] = 9;
+                timerPlaceholders[0]--;
+                if (timerPlaceholders[0] < 0){
+                  clearDisplay();
+                  timerPlaceholders[0] = 0;
+                  timerPlaceholders[1] = 0;
+                  timerPlaceholders[2] = 0;
+                  timerPlaceholders[3] = 0;
+                  break;
+                }
+              }
+            }
+          }
+        }     
+      }
+    }
+  }
+  return;
+}
+
+int timerStart(){
+
+}
+
+void takePuff(){
+  int captureTime = millis();
+  Serial.print("puffCount = ");
+  Serial.println(puffCount); 
+  while (true){  
+    //Serial.print("puffCount = ");
+    //Serial.println(puffCount);                                               //Determines if puff is long enough to count
+    int atomizerButtonVal = digitalRead(atomizerButtonPin); 
+    if (atomizerButtonVal == 0){
+      digitalWrite(greenLEDPin, HIGH);
+      if (!puffCaptured){
+        puffCapture = (millis() - captureTime);
+        Serial.print("puffCapture = ");
+        Serial.println(puffCapture);
+      }
+      if (puffCaptured){
+        puffCapture = ((millis() - captureTime) + puffCaptured);
+        Serial.print("puffCapture = ");
+        Serial.println(puffCapture);
+
+      }
+      while (puffCapture > 1500){
+        puffCapture = 0;
+        puffCaptured = 0;
+        digitalWrite(greenLEDPin, LOW);
+        delay(500);
+        digitalWrite(greenLEDPin, HIGH);
+        delay(500);
+        digitalWrite(greenLEDPin, LOW);
+        delay(500);
+        digitalWrite(greenLEDPin, HIGH);
+        delay(500);
+        digitalWrite(greenLEDPin, LOW);
+        
+      }
+    }
+    else if (atomizerButtonVal == 1){
+      digitalWrite(greenLEDPin, LOW);
+      Serial.print("puffCapture = ");
+      Serial.println(puffCapture);
+      if (puffCapture < 1500 && puffCapture > 0){
+        puffCaptured = puffCapture;//Captures an incomplete puff
+        Serial.print("CAPTURING");
+        break;
+      }
+      else {
+        puffCount++;
+        Serial.print("puffCount = ");
+        Serial.println(puffCount);
+        break;
+      }
+      
+    }
+    digitalWrite(atomizerPin, LOW);
+    
+  }
+}
+int taperTakePuff(){
+  int captureTime = millis();
+  while (true){  
+    //Serial.print("puffCount = ");
+    //Serial.println(puffCount);                                               //Determines if puff is long enough to count
+    int atomizerButtonVal = digitalRead(atomizerButtonPin); 
+    if (atomizerButtonVal == 0){
+      digitalWrite(greenLEDPin, HIGH);
+      if (!puffCaptured){
+        puffCapture = (millis() - captureTime);
+        Serial.print("puffCapture = ");
+        Serial.println(puffCapture);
+      }
+      if (puffCaptured){
+        /*if (recaptureTime == 0){
+          captureTime = millis();
+          Serial.println("WORKING");
+          recaptureTime = true;
+        }*/
+        captureTime = millis();
+        while (true){
+          atomizerButtonVal = digitalRead(atomizerButtonPin);
+        
+          puffCapture = (puffCaptured + (millis() - captureTime));
+          Serial.print(puffCapture);
+          Serial.print(" = ");
+          Serial.print(puffCaptured);
+          Serial.print(" + ");
+          Serial.print("(");
+          Serial.print(millis());
+          Serial.print(" - ");
+          Serial.print(captureTime);
+          Serial.println(")");
+   
+          if (puffCapture > 1500 || atomizerButtonVal == 1){
+            break;
+          }
+        }
+
+      }
+      while (puffCapture > 1500){
+        puffCapture = 0;
+        puffCaptured = 0;
+        digitalWrite(greenLEDPin, LOW);
+        delay(500);
+        digitalWrite(greenLEDPin, HIGH);
+        delay(500);
+        digitalWrite(greenLEDPin, LOW);
+        delay(500);
+        digitalWrite(greenLEDPin, HIGH);
+        delay(500);
+        digitalWrite(greenLEDPin, LOW);
+        puffCount++;
+        return puffCount;
+        
+      }
+    }
+    else if (atomizerButtonVal == 1){
+      digitalWrite(greenLEDPin, LOW);;
+      if (puffCapture < 1500 && puffCapture > 0){
+        puffCaptured = puffCapture;//Captures an incomplete puff
+        Serial.print("puffCapture = ");
+        Serial.println(puffCapture);
+        break;
+      }
+      
+    }
+    digitalWrite(atomizerPin, LOW);
+    
+  }
+}
+void stopPuff(){
+  digitalWrite(atomizerPin, LOW);
+}
+
+
+
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  int vapePower = digitalRead(switchPin);
+  int atomizerButtonVal = digitalRead(atomizerButtonPin);
+  while (vapePower == 1){
+    setCpuFrequencyMhz(240);
+    while (true){
+      vapePower = digitalRead(switchPin);
+      atomizerButtonVal = digitalRead(atomizerButtonPin);
+      int upButtonVal = digitalRead(upButtonPin);
+      int downButtonVal = digitalRead(downButtonPin);
+      if (vapePower == 0){
+        break;
+      }
+      Serial.print("vapePower = ");
+      Serial.print(vapePower);
+      Serial.print(" aButtonVal = ");
+      Serial.print(atomizerButtonVal);
+      Serial.print(" pC = ");
+      Serial.print(puffCapture);
+      Serial.print(" puffCount = ");
+      Serial.println(puffCount);
+      
+      if (atomizerButtonVal == 0){
+        takePuff();
+        stopPuff();
+      }
+      else {
+        stopPuff();
+      }
+      if (upButtonVal == 0 || downButtonVal == 0){
+        functionSelect = selectFunction();
+      }
+      if (functionSelect == 1){
+        taperOff();
+        functionSelect = 0;
+        break;
+      }
+      else if (functionSelect == 2){
+        selectTimer();
+        functionSelect = 0;
+        while (true){
+          Serial.println("Looping");
+          int upButtonVal = digitalRead(upButtonPin);
+          int downButtonVal = digitalRead(downButtonPin);
+          buttonVal = digitalRead(atomizerButtonPin);
+          if (upButtonVal == 0){
+            beginTimer();
+            break;
+          }
+          if (downButtonVal == 0){
+            break;
+          }
+          if (buttonVal == 0){
+            takePuff();
+          }
+          else if (buttonVal == 1){
+            stopPuff();
+          }
+        }
+        
+      }
+      else if (functionSelect == -1){
+        clearDisplay();
+        break;
+      }
+
+    }
+  }
+  while (vapePower == 0){
+    setCpuFrequencyMhz(80);
+    clearDisplay();
+    while (true){
+      vapePower = digitalRead(switchPin);
+      Serial.println(vapePower);
+      if (vapePower == 1){
+        break;
+      }
+    }
+  }
+}
