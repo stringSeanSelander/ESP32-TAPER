@@ -42,6 +42,8 @@ int puffCycle1 = 5, puffCycle2 = 3, puffCycle3 = 2;
 int puffCycle1Stage1 = 12, puffCycle1Stage2 = 8, puffCycle1Stage3 = 4, puffCycle1Stage4 = 2, puffCycle1Stage5 = 1;
 int puffCycle2Stage1 = 8, puffCycle2Stage2 = 4, puffCycle2Stage3 = 2;
 int puffCycle3Stage1 = 6, puffCycle3Stage2 = 3;
+int TPH0Saved, TPH1Saved, TPH2Saved, TPH3Saved;
+
 
 int puffCount = 0, maxPuffs = 999999, maxStages, maxCycles;
 int puffCaptured, puffCapture, taperPuffCaptured, puffCounted;
@@ -50,7 +52,7 @@ int buttonCount;
 int hourTens, hourOnes, minuteTens, minuteOnes, selector, offCaptureTime;
 int timerPlaceholders[4] = {hourTens, hourOnes, minuteTens, minuteOnes};
 bool taperSelected = false;
-bool functionClicked = 0, taperNewPuff = false;
+bool functionClicked = 0, taperNewPuff = false, increaseDisplayed = false;
 
 int buttonVal, clicked = 0, taperClicked = 0;
 
@@ -657,7 +659,10 @@ int taperOff(bool taperSelected, int taper){
             display.display(); //potentially add rest of the screen
             display.clearDisplay();
             display.setCursor(0, 45);
-
+            TPH0Saved = timerPlaceholders[0];
+            TPH1Saved = timerPlaceholders[1];
+            TPH2Saved = timerPlaceholders[2];
+            TPH3Saved = timerPlaceholders[3];
             display.print(F("  stages until delay  increases to "));
             display.print(timerPlaceholders[0]);
             display.print(timerPlaceholders[1]);
@@ -669,6 +674,7 @@ int taperOff(bool taperSelected, int taper){
           }
           display.display();
           display.setCursor(0, 0);
+          display.fillRect(0, 0, 5, 5, BLACK);
           display.print(puffsRemaining);
           display.print(F(" puffs until delay  of "));
           display.print(timerPlaceholders[0]);
@@ -676,10 +682,14 @@ int taperOff(bool taperSelected, int taper){
           display.print(F(":"));
           display.print(timerPlaceholders[2]);
           display.print(timerPlaceholders[3]);
-          display.setCursor(0, 45);
-          display.print(stagesRemaining);
-          display.print(F(" stages until delay increases"));
           display.display();
+          if (!increaseDisplayed){
+            display.setCursor(0, 45);
+            display.print(stagesRemaining);
+            display.print(F(" stages until delay increases"));
+            display.display();
+            increaseDisplayed = true;
+          }
           Serial.print("PUFFCOUNTED = ");
           Serial.print(puffCounted);
           Serial.print(" puffStage = ");
@@ -705,7 +715,7 @@ int taperOff(bool taperSelected, int taper){
         }
         else if (buttonVal == 1){
           if (simulated == false && extracted == true){
-            Serial.println("Works2");
+            Serial.println("Works3");
             puffCycle--;
             simulated = true;
             
@@ -713,7 +723,7 @@ int taperOff(bool taperSelected, int taper){
             display.clearDisplay();
             display.setCursor(0, 45);
 
-            display.print(F("  stages until delay  increases to "));
+            display.print(F("  stages until delay increases to "));
             display.print(timerPlaceholders[0]);
             display.print(timerPlaceholders[1]);
             display.print(F(":"));
@@ -723,7 +733,7 @@ int taperOff(bool taperSelected, int taper){
             break;
           }
           display.display();
-          
+          Serial.println("Works4");
           display.setCursor(0, 0);
           display.print(puffsRemaining);
           display.print(F(" puffs until delay  of "));
@@ -734,7 +744,7 @@ int taperOff(bool taperSelected, int taper){
           display.print(timerPlaceholders[3]);
           display.setCursor(0, 45);
           display.print(stagesRemaining);
-          display.print(" stages until delay increases.");
+          display.print(" stages until delay increases");
           display.display();
           Serial.print("PUFFCOUNTED = ");
           Serial.print(puffCounted);
@@ -787,152 +797,392 @@ int taperOff(bool taperSelected, int taper){
     }
   }
   while (taper == 1){
-    Serial.println("1");
-    int puffs[puffCycle2] = {5, 5, 5};
-    int waitTimes[puffCycle2] = {3, 6, 12};
-    if (puffCycle == 0){
-      timerPlaceholders[0] = 0;
-      timerPlaceholders[1] = 3;
-      timerPlaceholders[2] = 0;
-      timerPlaceholders[3] = 0;
-      maxStages = 2;
-      maxPuffs = 5;
-      maxCycles = 3;
-    }
-    else if (puffCycle == 1){
-      timerPlaceholders[0] = 0;
-      timerPlaceholders[1] = 6;
-      timerPlaceholders[2] = 0;
-      timerPlaceholders[3] = 0;
-      maxStages = 4;
-      maxPuffs = 5;
-      maxCycles = 3;
-    }
-    else if (puffCycle == 2){
-      timerPlaceholders[0] = 1;
-      timerPlaceholders[1] = 2;
-      timerPlaceholders[2] = 0;
-      timerPlaceholders[3] = 0;
-      maxStages = 2;
-      maxPuffs = 5;
-      maxCycles = 3;
-    }
+    bool simulated = false, extracted = false;
     while (true){
-      int buttonVal = digitalRead(atomizerButtonPin);
-      if (buttonVal == 0){
-        puffCapture = 0;
-        int puffCounted = taperTakePuff(maxPuffs);
+      int puffs[puffCycle2] = {5, 5, 5};
+      int waitTimes[puffCycle2] = {3, 6, 12};
+      if (puffCycle == 0){
+        timerPlaceholders[0] = 0;
+        timerPlaceholders[1] = 3;
+        timerPlaceholders[2] = 0;
+        timerPlaceholders[3] = 0;
+        maxStages = 2;
+        maxPuffs = 5;
+        maxCycles = 3;
+      }
+      else if (puffCycle == 1){
+        timerPlaceholders[0] = 0;
+        timerPlaceholders[1] = 6;
+        timerPlaceholders[2] = 0;
+        timerPlaceholders[3] = 0;
+        maxStages = 4;
+        maxPuffs = 5;
+        maxCycles = 3;
+      }
+      else if (puffCycle == 2){
+        timerPlaceholders[0] = 1;
+        timerPlaceholders[1] = 2;
+        timerPlaceholders[2] = 0;
+        timerPlaceholders[3] = 0;
+        maxStages = 2;
+        maxPuffs = 5;
+        maxCycles = 3;
+      }
+      while (true){
+        int buttonVal = digitalRead(atomizerButtonPin);
         int puffsRemaining = maxPuffs - puffCounted;
         int stagesRemaining = maxStages - puffStage;
-        display.display();
-        display.clearDisplay();
-        display.setCursor(0, 0);
-        display.print(puffsRemaining);
-        display.print(F(" puffs until delay  of "));
-        display.print(timerPlaceholders[0]);
-        display.print(timerPlaceholders[1]);
-        display.print(F(":"));
-        display.print(timerPlaceholders[2]);
-        display.print(timerPlaceholders[3]);
-        display.setCursor(0, 45);
-        display.print(stagesRemaining);
-        display.print(F(" stages until delay increases"));
-        display.display();
-        Serial.print("PUFFCOUNTED = ");
-        Serial.print(puffCounted);
-        Serial.print(" puffStage = ");
-        Serial.print(puffStage);
-        Serial.print(" puffCycle = ");
-        Serial.println(puffCycle);
-        Serial.print("maxPuffs = ");
-        Serial.print(maxPuffs);
-        Serial.print(" maxStages = ");
-        Serial.print(maxStages);
-        Serial.print(" maxCycles = ");
-        Serial.println(maxCycles);
-        if (puffCounted >= maxPuffs){
-          if (puffStage >= (maxStages - 1)){//subtracted 1 to register the maxStage
+        if (buttonVal == 0){
+          puffCapture = 0;
+          puffCounted = taperTakePuff(maxPuffs);
+          Serial.print("puffCounted = ");
+          Serial.println(puffCounted);
+          puffsRemaining = maxPuffs - puffCounted;
+          stagesRemaining = maxStages - puffStage;
+          Serial.print(stagesRemaining);
+          Serial.print(" = ");
+          Serial.print(maxStages);
+          Serial.print(" - ");
+          Serial.println(puffStage);
+          if (simulated == false && extracted == false){
+            Serial.println("Works1");
             puffCycle++;
-            if (puffCycle >= maxCycles){
-              puffCycle = 0;
-              return 1;
-            } 
+            extracted = true;
+            break;
           }
-          break;
+          if (simulated == false && extracted == true){
+            Serial.println("Works2");
+            puffCycle--;
+            simulated = true;
+            display.display(); //potentially add rest of the screen
+            display.clearDisplay();
+            display.setCursor(0, 45);
+            TPH0Saved = timerPlaceholders[0];
+            TPH1Saved = timerPlaceholders[1];
+            TPH2Saved = timerPlaceholders[2];
+            TPH3Saved = timerPlaceholders[3];
+            display.print(F("  stages until delay  increases to "));
+            display.print(timerPlaceholders[0]);
+            display.print(timerPlaceholders[1]);
+            display.print(F(":"));
+            display.print(timerPlaceholders[2]);
+            display.print(timerPlaceholders[3]);
+            display.display();
+            break;
+          }
+          display.display();
+          display.setCursor(0, 0);
+          display.fillRect(0, 0, 5, 5, BLACK);
+          display.print(puffsRemaining);
+          display.print(F(" puffs until delay  of "));
+          display.print(timerPlaceholders[0]);
+          display.print(timerPlaceholders[1]);
+          display.print(F(":"));
+          display.print(timerPlaceholders[2]);
+          display.print(timerPlaceholders[3]);
+          display.display();
+          if (!increaseDisplayed){
+            display.setCursor(0, 45);
+            display.print(stagesRemaining);
+            display.print(F(" stages until delay increases"));
+            display.display();
+            increaseDisplayed = true;
+          }
+          Serial.print("PUFFCOUNTED = ");
+          Serial.print(puffCounted);
+          Serial.print(" puffStage = ");
+          Serial.print(puffStage);
+          Serial.print(" puffCycle = ");
+          Serial.println(puffCycle);
+          Serial.print("maxPuffs = ");
+          Serial.print(maxPuffs);
+          Serial.print(" maxStages = ");
+          Serial.print(maxStages);
+          Serial.print(" maxCycles = ");
+          Serial.println(maxCycles);
+          if (puffCounted >= maxPuffs){
+            if (puffStage >= maxStages){//subtracted 1 to register the maxStage
+              puffCycle++;
+              if (puffCycle >= maxCycles){
+                puffCycle = 0;
+                return 1;
+              } 
+            }
+            break;
+          }
         }
+        else if (buttonVal == 1){
+          if (simulated == false && extracted == true){
+            Serial.println("Works3");
+            puffCycle--;
+            simulated = true;
+            
+            display.display(); //potentially add rest of the screen
+            display.clearDisplay();
+            display.setCursor(0, 45);
+
+            display.print(F("  stages until delay increases to "));
+            display.print(timerPlaceholders[0]);
+            display.print(timerPlaceholders[1]);
+            display.print(F(":"));
+            display.print(timerPlaceholders[2]);
+            display.print(timerPlaceholders[3]);
+            display.display();
+            break;
+          }
+          display.display();
+          Serial.println("Works4");
+          display.setCursor(0, 0);
+          display.print(puffsRemaining);
+          display.print(F(" puffs until delay  of "));
+          display.print(timerPlaceholders[0]);
+          display.print(timerPlaceholders[1]);
+          display.print(F(":"));
+          display.print(timerPlaceholders[2]);
+          display.print(timerPlaceholders[3]);
+          display.setCursor(0, 45);
+          display.print(stagesRemaining);
+          display.print(" stages until delay increases");
+          display.display();
+          Serial.print("PUFFCOUNTED = ");
+          Serial.print(puffCounted);
+          Serial.print(" puffStage = ");
+          Serial.print(puffStage);
+          Serial.print(" puffCycle = ");
+          Serial.println(puffCycle);
+          Serial.print("maxPuffs = ");
+          Serial.print(maxPuffs);
+          Serial.print(" maxStages = ");
+          Serial.print(maxStages);
+          Serial.print(" maxCycles = ");
+          Serial.print(" puffsRemaining = ");
+          Serial.println(puffsRemaining);
+          if (puffCounted >= maxPuffs){
+            Serial.print("Hello there");
+            if (puffStage >= (maxStages - 1)){//subtracted 1 to register the maxStage
+              puffCycle++;
+              if (puffCycle >= maxCycles){
+                puffCycle = 0;
+                return 1;
+              } 
+            }
+            break;
+          }
+        }
+        
       }
+      if (puffCounted >= maxPuffs){
+        Serial.print("Broken");
+        break;
+      }
+      
+      
     }
-    break;
+    if (puffCounted >= maxPuffs){
+      Serial.print("Hello there");
+      if (puffStage >= (maxStages - 1)){//subtracted 1 to register the maxStage
+        puffCycle++;
+        if (puffCycle >= maxCycles){
+          puffCycle = 0;
+          simulated = false;
+          extracted = false;
+          return 1;
+        } 
+      }
+      simulated = false;
+      extracted = false;
+      break;
+    }
   }
   while (taper == 2){
-    Serial.println("2");
-    int puffs[puffCycle3] = {5, 5};
-    int waitTimes[puffCycle3] = {6, 12};
-    if (puffCycle == 0){
-      timerPlaceholders[0] = 0;
-      timerPlaceholders[1] = 6;
-      timerPlaceholders[2] = 0;
-      timerPlaceholders[3] = 0;
-      maxStages = 2;
-      maxPuffs = 5;
-      maxCycles = 2;
-    }
-    else if (puffCycle == 1){
-      timerPlaceholders[0] = 1;
-      timerPlaceholders[1] = 2;
-      timerPlaceholders[2] = 0;
-      timerPlaceholders[3] = 0;
-      maxStages = 2;
-      maxPuffs = 5;
-      maxCycles = 2;
-    }
+    bool simulated = false, extracted = false;
     while (true){
-      int buttonVal = digitalRead(atomizerButtonPin);
-      if (buttonVal == 0){
-        puffCapture = 0;
-        int puffCounted = taperTakePuff(maxPuffs);
+      int puffs[puffCycle3] = {5, 5};
+      int waitTimes[puffCycle3] = {6, 12};
+      if (puffCycle == 0){
+        timerPlaceholders[0] = 0;
+        timerPlaceholders[1] = 6;
+        timerPlaceholders[2] = 0;
+        timerPlaceholders[3] = 0;
+        maxStages = 2;
+        maxPuffs = 5;
+        maxCycles = 2;
+      }
+      else if (puffCycle == 1){
+        timerPlaceholders[0] = 1;
+        timerPlaceholders[1] = 2;
+        timerPlaceholders[2] = 0;
+        timerPlaceholders[3] = 0;
+        maxStages = 2;
+        maxPuffs = 5;
+        maxCycles = 2;
+      }
+
+      while (true){
+        int buttonVal = digitalRead(atomizerButtonPin);
         int puffsRemaining = maxPuffs - puffCounted;
         int stagesRemaining = maxStages - puffStage;
-        display.display();
-        display.clearDisplay();
-        display.setCursor(0, 0);
-        display.print(puffsRemaining);
-        display.print(F(" puffs until delay  of "));
-        display.print(timerPlaceholders[0]);
-        display.print(timerPlaceholders[1]);
-        display.print(F(":"));
-        display.print(timerPlaceholders[2]);
-        display.print(timerPlaceholders[3]);
-        display.setCursor(0, 45);
-        display.print(stagesRemaining);
-        display.print(F(" stages until delay increases to"));
-
-        display.display();
-        Serial.print("PUFFCOUNTED = ");
-        Serial.print(puffCounted);
-        Serial.print(" puffStage = ");
-        Serial.print(puffStage);
-        Serial.print(" puffCycle = ");
-        Serial.println(puffCycle);
-        Serial.print("maxPuffs = ");
-        Serial.print(maxPuffs);
-        Serial.print(" maxStages = ");
-        Serial.print(maxStages);
-        Serial.print(" maxCycles = ");
-        Serial.println(maxCycles);
-        if (puffCounted >= maxPuffs){
-          if (puffStage >= (maxStages - 1)){//subtracted 1 to register the maxStage
+        if (buttonVal == 0){
+          puffCapture = 0;
+          puffCounted = taperTakePuff(maxPuffs);
+          Serial.print("puffCounted = ");
+          Serial.println(puffCounted);
+          puffsRemaining = maxPuffs - puffCounted;
+          stagesRemaining = maxStages - puffStage;
+          Serial.print(stagesRemaining);
+          Serial.print(" = ");
+          Serial.print(maxStages);
+          Serial.print(" - ");
+          Serial.println(puffStage);
+          if (simulated == false && extracted == false){
+            Serial.println("Works1");
             puffCycle++;
-            if (puffCycle >= maxCycles){
-              puffCycle = 0;
-              return 1;
-            } 
+            extracted = true;
+            break;
           }
-          break;
+          if (simulated == false && extracted == true){
+            Serial.println("Works2");
+            puffCycle--;
+            simulated = true;
+            display.display(); //potentially add rest of the screen
+            display.clearDisplay();
+            display.setCursor(0, 45);
+            TPH0Saved = timerPlaceholders[0];
+            TPH1Saved = timerPlaceholders[1];
+            TPH2Saved = timerPlaceholders[2];
+            TPH3Saved = timerPlaceholders[3];
+            display.print(F("  stages until delay  increases to "));
+            display.print(timerPlaceholders[0]);
+            display.print(timerPlaceholders[1]);
+            display.print(F(":"));
+            display.print(timerPlaceholders[2]);
+            display.print(timerPlaceholders[3]);
+            display.display();
+            break;
+          }
+          display.display();
+          display.setCursor(0, 0);
+          display.fillRect(0, 0, 5, 5, BLACK);
+          display.print(puffsRemaining);
+          display.print(F(" puffs until delay  of "));
+          display.print(timerPlaceholders[0]);
+          display.print(timerPlaceholders[1]);
+          display.print(F(":"));
+          display.print(timerPlaceholders[2]);
+          display.print(timerPlaceholders[3]);
+          display.display();
+          if (!increaseDisplayed){
+            display.setCursor(0, 45);
+            display.print(stagesRemaining);
+            display.print(F(" stages until delay increases"));
+            display.display();
+            increaseDisplayed = true;
+          }
+          Serial.print("PUFFCOUNTED = ");
+          Serial.print(puffCounted);
+          Serial.print(" puffStage = ");
+          Serial.print(puffStage);
+          Serial.print(" puffCycle = ");
+          Serial.println(puffCycle);
+          Serial.print("maxPuffs = ");
+          Serial.print(maxPuffs);
+          Serial.print(" maxStages = ");
+          Serial.print(maxStages);
+          Serial.print(" maxCycles = ");
+          Serial.println(maxCycles);
+          if (puffCounted >= maxPuffs){
+            if (puffStage >= maxStages){//subtracted 1 to register the maxStage
+              puffCycle++;
+              if (puffCycle >= maxCycles){
+                puffCycle = 0;
+                return 1;
+              } 
+            }
+            break;
+          }
         }
+        else if (buttonVal == 1){
+          if (simulated == false && extracted == true){
+            Serial.println("Works3");
+            puffCycle--;
+            simulated = true;
+            
+            display.display(); //potentially add rest of the screen
+            display.clearDisplay();
+            display.setCursor(0, 45);
+
+            display.print(F("  stages until delay increases to "));
+            display.print(timerPlaceholders[0]);
+            display.print(timerPlaceholders[1]);
+            display.print(F(":"));
+            display.print(timerPlaceholders[2]);
+            display.print(timerPlaceholders[3]);
+            display.display();
+            break;
+          }
+          display.display();
+          Serial.println("Works4");
+          display.setCursor(0, 0);
+          display.print(puffsRemaining);
+          display.print(F(" puffs until delay  of "));
+          display.print(timerPlaceholders[0]);
+          display.print(timerPlaceholders[1]);
+          display.print(F(":"));
+          display.print(timerPlaceholders[2]);
+          display.print(timerPlaceholders[3]);
+          display.setCursor(0, 45);
+          display.print(stagesRemaining);
+          display.print(" stages until delay increases");
+          display.display();
+          Serial.print("PUFFCOUNTED = ");
+          Serial.print(puffCounted);
+          Serial.print(" puffStage = ");
+          Serial.print(puffStage);
+          Serial.print(" puffCycle = ");
+          Serial.println(puffCycle);
+          Serial.print("maxPuffs = ");
+          Serial.print(maxPuffs);
+          Serial.print(" maxStages = ");
+          Serial.print(maxStages);
+          Serial.print(" maxCycles = ");
+          Serial.print(" puffsRemaining = ");
+          Serial.println(puffsRemaining);
+          if (puffCounted >= maxPuffs){
+            Serial.print("Hello there");
+            if (puffStage >= (maxStages - 1)){//subtracted 1 to register the maxStage
+              puffCycle++;
+              if (puffCycle >= maxCycles){
+                puffCycle = 0;
+                return 1;
+              } 
+            }
+            break;
+          }
+        }
+        
       }
+      if (puffCounted >= maxPuffs){
+        Serial.print("Broken");
+        break;
+      }
+      
+      
     }
-    break;
+    if (puffCounted >= maxPuffs){
+      Serial.print("Hello there");
+      if (puffStage >= (maxStages - 1)){//subtracted 1 to register the maxStage
+        puffCycle++;
+        if (puffCycle >= maxCycles){
+          puffCycle = 0;
+          simulated = false;
+          extracted = false;
+          return 1;
+        } 
+      }
+      simulated = false;
+      extracted = false;
+      break;
+    }
   }
   display.display();
   display.clearDisplay();
