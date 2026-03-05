@@ -15,10 +15,10 @@ int puffCycle, puffStage;
 
 
 //Current issues:
-//taperOff() registering 8 stages but only going for 2 stages before continuing
-//Clean up text on screen
+//Fix overlap when updating puffsRemaining
+//Fix blueLEDPin being on
 
-//Add vapePower functions to each loop
+//Add vapePower functions to timer
 #include <LiquidCrystal.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -26,10 +26,10 @@ int puffCycle, puffStage;
 #include <Adafruit_SSD1306.h>
 
 
-int switchPin = 15;
-int redLEDPin = 2;
-int greenLEDPin = 0; 
-int blueLEDPin = 4;
+int switchPin = 19; //on esp32 dev module switchPin = 19
+int redLEDPin = 15; //On esp32 dev module redLEDPin = 15
+int greenLEDPin = 2; //On esp32 dev module greenLEDPin = 2
+int blueLEDPin = 4; //On esp32 dev module blueLEDPin = 4
 int atomizerButtonPin = 16; 
 int upButtonPin = 17;
 int downButtonPin = 5;
@@ -76,7 +76,7 @@ void setup() {
   pinMode(OLEDPin, OUTPUT);
   pinMode(atomizerPin, OUTPUT);
 
-  Serial.begin(9600);
+  Serial.begin(115200);
   digitalWrite(OLEDPin, HIGH);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
@@ -101,7 +101,7 @@ void displayFactoryMessage(){//Factory message
   display.setCursor(0, 0);
   display.println(F("Factory Test"));
   display.display();
-  delay(500);
+  delay(5000);
   display.display();
   display.clearDisplay();
   display.display();
@@ -133,6 +133,13 @@ int selectFunction(){//Select taper or timer function and won't execute if butto
         int atomizerButtonVal = digitalRead(atomizerButtonPin);
         int upButtonVal = digitalRead(upButtonPin);
         int downButtonVal = digitalRead(downButtonPin);
+        while (vapePower == 0){
+          display.display();
+          display.clearDisplay();
+          display.display();
+          setCpuFrequencyMhz(80);
+          return -1;
+        }
         if (downButtonVal == 0){
           return 1;
         }
@@ -183,6 +190,14 @@ int selectTaper(){ //Select the different taper options
     int downButtonVal = digitalRead(downButtonPin);
     int upButtonVal = digitalRead(upButtonPin);
     buttonVal = digitalRead(atomizerButtonPin);
+    int vapePower = digitalRead(switchPin);
+    while (vapePower == 0){
+      display.display();
+      display.clearDisplay();
+      display.display();
+      setCpuFrequencyMhz(80);
+      return -1;
+    }
     if (downButtonVal == 0){
       return -1;
     }
@@ -292,6 +307,7 @@ void displayTimer(){ //Displays timer
   //buttonVal = 1; //Used as safety to ensure no double trigger of selector
 }
 
+
 void selectTimer(){ //Allows user to change the selector and values in each placeholder
   display.display();
   display.clearDisplay();
@@ -329,6 +345,7 @@ void selectTimer(){ //Allows user to change the selector and values in each plac
       clicked = 0;
     }
     Serial.println("Hello");
+    int vapePower = digitalRead(switchPin);
     int downButtonVal = digitalRead(downButtonPin);
     int upButtonVal = digitalRead(upButtonPin);
     int buttonVal = digitalRead(atomizerButtonPin);
@@ -355,6 +372,12 @@ void selectTimer(){ //Allows user to change the selector and values in each plac
           break;
         }
       }
+    }
+    if (vapePower == 0){
+      display.display();
+      display.clearDisplay();
+      display.display();
+      return;
     }
     while (upButtonVal == 0){
       delay(50);
@@ -631,9 +654,24 @@ int taperOff(bool taperSelected, int taper){
         maxCycles = 5;
       }
       while (true){
+        int vapePower = digitalRead(switchPin);
         int buttonVal = digitalRead(atomizerButtonPin);
         int puffsRemaining = maxPuffs - puffCounted;
         int stagesRemaining = maxStages - puffStage;
+        while (vapePower == 0){
+          display.display();
+          display.clearDisplay();
+          display.display();
+          setCpuFrequencyMhz(80);
+          while (true){
+            vapePower = digitalRead(switchPin);
+            if (vapePower == 1){
+              setCpuFrequencyMhz(240);
+              break;
+            }
+          }
+          break;
+        }
         if (buttonVal == 0){
           puffCapture = 0;
           puffCounted = taperTakePuff(maxPuffs);
@@ -832,6 +870,21 @@ int taperOff(bool taperSelected, int taper){
         int buttonVal = digitalRead(atomizerButtonPin);
         int puffsRemaining = maxPuffs - puffCounted;
         int stagesRemaining = maxStages - puffStage;
+        int vapePower = digitalRead(switchPin);
+        while (vapePower == 0){
+          display.display();
+          display.clearDisplay();
+          display.display();
+          setCpuFrequencyMhz(80);
+          while (true){
+            vapePower = digitalRead(switchPin);
+            if (vapePower == 1){
+              setCpuFrequencyMhz(240);
+              break;
+            }
+          }
+          break;
+        }
         if (buttonVal == 0){
           puffCapture = 0;
           puffCounted = taperTakePuff(maxPuffs);
@@ -1022,6 +1075,21 @@ int taperOff(bool taperSelected, int taper){
         int buttonVal = digitalRead(atomizerButtonPin);
         int puffsRemaining = maxPuffs - puffCounted;
         int stagesRemaining = maxStages - puffStage;
+        int vapePower = digitalRead(switchPin);
+        while (vapePower == 0){
+          display.display();
+          display.clearDisplay();
+          display.display();
+          setCpuFrequencyMhz(80);
+          while (true){
+            vapePower = digitalRead(switchPin);
+            if (vapePower == 1){
+              setCpuFrequencyMhz(240);
+              break;
+            }
+          }
+          break;
+        }
         if (buttonVal == 0){
           puffCapture = 0;
           puffCounted = taperTakePuff(maxPuffs);
@@ -1575,6 +1643,7 @@ void loop() {
         functionSelect = 0;
         while (true){
           Serial.println("Looping");
+          int vapePower = digitalRead(switchPin);
           int upButtonVal = digitalRead(upButtonPin);
           int downButtonVal = digitalRead(downButtonPin);
           buttonVal = digitalRead(atomizerButtonPin);
@@ -1591,6 +1660,10 @@ void loop() {
           else if (buttonVal == 1){
             stopPuff();
           }
+          if (vapePower == 0){
+            setCpuFrequencyMhz(80);
+            break;
+          }
           
         }
         
@@ -1599,8 +1672,9 @@ void loop() {
         clearDisplay();
         break;
       }
-
+      
     }
+    break;
   }
   while (vapePower == 0){
     setCpuFrequencyMhz(80);
