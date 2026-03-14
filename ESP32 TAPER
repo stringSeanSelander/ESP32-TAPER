@@ -15,9 +15,11 @@ int puffCycle, puffStage;
 
 
 //Current issues:
-//Clear display and go into low power mode when vape is on and screen is on at any point
-//Power ESP32 with battery only
-//Figure out weird problem where puff is completed but it blinks (could also just be puff released at the last moment)
+//taperOff() registering 8 stages but only going for 2 stages before continuing
+//Clean up text on screen
+//Make so the sleep mode doesnt happen while selecting the taper sequence
+//Add vapePower functions to timer
+//Make so timer gets cleared when a timer setup is cancelled
 #include <LiquidCrystal.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -25,15 +27,15 @@ int puffCycle, puffStage;
 #include <Adafruit_SSD1306.h>
 
 
-int switchPin = 19; //on esp32 dev module switchPin = 19
-int redLEDPin = 15; //On esp32 dev module redLEDPin = 15
-int greenLEDPin = 2; //On esp32 dev module greenLEDPin = 2
+int switchPin = 15; //on esp32 dev module switchPin = 19
+int redLEDPin = 2; //On esp32 dev module redLEDPin = 15
+int greenLEDPin = 0; //On esp32 dev module greenLEDPin = 2
 int blueLEDPin = 4; //On esp32 dev module blueLEDPin = 4
 int atomizerButtonPin = 16; //On esp32 dev module atomizerButtonPin = 16
 int upButtonPin = 17; //On esp32 dev module upButtonPin = 17
 int downButtonPin = 5; //On esp32 dev module downButtonPin = 5
 int OLEDPin = 18; //On esp32 dev module OLEDPin = 18
-int atomizerPin = 33; //on esp32 dev module atomizerPin = 33
+int atomizerPin = 19; //on esp32 dev module atomizerPin = 33
 //int atomizerMic = 23;
 
 int functionSelect = 0;
@@ -51,7 +53,7 @@ int buttonCount;
 int hourTens, hourOnes, minuteTens, minuteOnes, selector, offCaptureTime;
 int timerPlaceholders[4] = {hourTens, hourOnes, minuteTens, minuteOnes};
 bool taperSelected = false;
-bool functionClicked = 0, taperNewPuff = false, increaseDisplayed = false;
+bool functionClicked = 0, taperNewPuff = false, increaseDisplayed = false, puffComplete = false;
 
 int buttonVal, clicked = 0, taperClicked = 0;
 
@@ -75,7 +77,7 @@ void setup() {
   pinMode(OLEDPin, OUTPUT);
   pinMode(atomizerPin, OUTPUT);
 
-  Serial.begin(115200);
+  Serial.begin(9600);
   digitalWrite(OLEDPin, HIGH);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
@@ -121,7 +123,7 @@ int selectFunction(){//Select taper or timer function and won't execute if butto
     display.display();
     display.clearDisplay();
     display.setCursor(0, 0);
-    display.print(F("Press the 'fire'     button to cycle      thru taper options.  Use the - to escape  and the + to confirm."));
+    display.print(F("Press [-] for  Taper function, press [+]  for timer function."));
     display.setCursor(27, 55);
     display.print(F("[-]"));
     display.setCursor(85, 55);
@@ -220,6 +222,7 @@ int selectTaper(){ //Select the different taper options
     Serial.print("Outside bc = ");
     Serial.println(buttonCount);
     while (buttonVal == 0 && taperClicked == 0){
+      captureTime = millis();
       Serial.println("Hello");
       while (true){
         buttonVal = digitalRead(atomizerButtonPin);
@@ -236,14 +239,30 @@ int selectTaper(){ //Select the different taper options
           display.display();
           display.clearDisplay();
           display.setCursor(0, 0);
-          display.print(F("Press the 'fire' button to cycle through taper options. Use the - to escape and the + to confirm."));
-          display.setCursor(30, 45);
-          display.print(taperOptions[buttonCount]);
+          display.print(F("Press the 'fire'     button to cycle      thru taper options.  Use the - to escape  and the + to confirm."));
           display.setCursor(27, 55);
           display.print(F("[-]"));
           display.setCursor(85, 55);
           display.print(F("[+]"));
           display.display();
+          if (buttonCount == 0){
+            display.display();
+            display.setCursor(30, 45);
+            display.print(taperOptions[buttonCount]);
+            display.display();
+          }
+          else if (buttonCount == 1){
+            display.display();
+            display.setCursor(45, 45);
+            display.print(taperOptions[buttonCount]);
+            display.display();
+          }
+          else if (buttonCount == 2){
+            display.display();
+            display.setCursor(52, 45);
+            display.print(taperOptions[buttonCount]);
+            display.display();
+          }
           taperClicked = 1;
           break;
         }
@@ -298,7 +317,7 @@ void displayTimer(){ //Displays timer
   display.display();
   display.clearDisplay();
   display.setCursor(0, 27);
-  display.print(F("Use - and + to changeto desired number"));
+  display.print(F("Use - and + to changeto desired number."));
   display.setCursor(0, 45);
   display.print(F("Press'fire'to select."));
   display.setCursor(27, 55);
@@ -325,7 +344,7 @@ void selectTimer(){ //Allows user to change the selector and values in each plac
   display.display();
   display.clearDisplay();
   display.setCursor(0, 27);
-  display.print(F("Use - and + to changeto desired number"));
+  display.print(F("Use - and + to changeto desired number."));
   display.setCursor(0, 45);
   display.print(F("Press'fire'to select."));
   display.setCursor(27, 55);
@@ -595,6 +614,10 @@ void beginTimer(){//Timer execution
         }
       }    
     }
+    if (timerPlaceholders[0] == 0 && timerPlaceholders[1] == 0 && timerPlaceholders[2] == 0 && timerPlaceholders[3] == 0){
+      clearDisplay();
+      break;
+    }
   }
 }
 void taperDisplayTime(){
@@ -687,6 +710,7 @@ int taperOff(bool taperSelected, int taper){
         }
         if (buttonVal == 0){
           puffCapture = 0;
+          puffComplete = false;
           puffCounted = taperTakePuff(maxPuffs);
           Serial.print("puffCounted = ");
           Serial.println(puffCounted);
@@ -900,6 +924,7 @@ int taperOff(bool taperSelected, int taper){
         }
         if (buttonVal == 0){
           puffCapture = 0;
+          puffComplete = false;
           puffCounted = taperTakePuff(maxPuffs);
           Serial.print("puffCounted = ");
           Serial.println(puffCounted);
@@ -1105,6 +1130,7 @@ int taperOff(bool taperSelected, int taper){
         }
         if (buttonVal == 0){
           puffCapture = 0;
+          puffComplete = false;
           puffCounted = taperTakePuff(maxPuffs);
           Serial.print("puffCounted = ");
           Serial.println(puffCounted);
@@ -1452,7 +1478,7 @@ void takePuff(){
       digitalWrite(greenLEDPin, LOW);
       Serial.print("puffCapture1 = ");
       Serial.println(puffCapture);
-      if (puffCapture < 1700 && puffCapture > 0){
+      if (puffCapture < 1300 && puffCapture > 0){
         puffCaptured = puffCapture;//Captures an incomplete puff
         Serial.print("CAPTURING");
         break;
@@ -1486,6 +1512,10 @@ int taperTakePuff(int maxPuffs){
           puffCapture = (millis() - captureTime);
           Serial.print("puffCapture2 = ");
           Serial.println(puffCapture);
+          if (atomizerButtonVal == 1 && puffCapture > 1300){
+            puffComplete = true;
+            break;
+          }
           if (puffCapture > 2500 || atomizerButtonVal == 1){
             break;
           }
@@ -1500,8 +1530,10 @@ int taperTakePuff(int maxPuffs){
         captureTime = millis();
         while (true){
           atomizerButtonVal = digitalRead(atomizerButtonPin);
-        
           puffCapture = (taperPuffCaptured + (millis() - captureTime));
+          /*if (taperPuffCaptured2){
+            puffCapture = (taperPuffCaptured2 + (millis() - captureTime));
+          }*/
           Serial.print(puffCapture);
           Serial.print(" = ");
           Serial.print(taperPuffCaptured);
@@ -1516,13 +1548,18 @@ int taperTakePuff(int maxPuffs){
           display.setCursor(0, 0);
           display.print(puffCapture);
           display.display();*/
-          if (puffCapture > 2500 || atomizerButtonVal == 1){
+          if (puffCapture > 1300 && atomizerButtonVal == 1){
+            puffComplete = true;
+            break;
+          }
+          if (atomizerButtonVal == 1){
             break;
           }
         }
-
+        //1700
       }
-      while (puffCapture > 2500){
+      
+      while (puffCapture > 2500 || puffComplete){
         puffCapture = 0;
         taperPuffCaptured = 0;
         digitalWrite(atomizerPin, LOW);
@@ -1573,7 +1610,7 @@ int taperTakePuff(int maxPuffs){
           return puffCount;
         }
       }
-      if (puffCapture < 1700 && puffCapture > 0){
+      if (puffCapture < 2500 && puffCapture > 0){
         if (taperNewPuff){
           taperPuffCaptured = puffCapture;//Captures an incomplete puff
         }
@@ -1629,6 +1666,7 @@ void loop() {
         stopPuff();
       }
       if (upButtonVal == 0 || downButtonVal == 0){
+        setCpuFrequencyMhz(240);
         if (functionClicked == 0){
           functionSelect = selectFunction();
           functionClicked = 1;
@@ -1661,8 +1699,10 @@ void loop() {
       else if (functionSelect == 2){
         selectTimer();
         functionSelect = 0;
+        captureTime = millis();
         while (true){
           Serial.println("Looping");
+          elapsedTime = millis() - captureTime;
           int vapePower = digitalRead(switchPin);
           int upButtonVal = digitalRead(upButtonPin);
           int downButtonVal = digitalRead(downButtonPin);
@@ -1672,6 +1712,10 @@ void loop() {
             break;
           }
           if (downButtonVal == 0){
+            timerPlaceholders[0] = 0;
+            timerPlaceholders[1] = 0;
+            timerPlaceholders[2] = 0;
+            timerPlaceholders[3] = 0;
             break;
           }
           if (buttonVal == 0){
@@ -1682,6 +1726,11 @@ void loop() {
           }
           if (vapePower == 0){
             setCpuFrequencyMhz(80);
+            break;
+          }
+          if (elapsedTime > 14999){
+            setCpuFrequencyMhz(80);
+            clearDisplay();
             break;
           }
           
